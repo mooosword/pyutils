@@ -3,8 +3,11 @@
 import sys
 import os
 import logger
+import time
 
-LEVEL = os.getenv('LOG', 2)
+LEVEL = os.getenv('LOG', 1)
+
+BIG_FILE_LINE_COUNT = 1000000
 
 
 def get_file_line_count(filename):
@@ -50,33 +53,55 @@ def load_line(filename, sep='\t', header=False, col_num=None):
     :param col_num: 文件列数, 用于校验数据正确与否
     :return:
     """
-    li = list()
+    def line_generator(file_object):
+        while True:
+            _line = file_object.readline()
+            if not _line:
+                break
+            yield _line
+
+    res = []
+    start_ts = time.time()
     with open(filename, 'r') as f:
         if header:
             line = f.readline()
             headers = get_header(line, sep, col_num)
-        for line in f:
+        # 获取文件大小, 大文件则采用生成器方法迭代
+        count = get_file_line_count(filename)
+        if count < BIG_FILE_LINE_COUNT:
+            lines = f.readlines()
+        else:
+            lines = line_generator(f)
+
+        for line in lines:
             line = line.decode('utf-8').strip()
             if not line:
                 continue
-            terms = line.split(sep)
-            terms = [t.strip() for t in terms]
+            terms = [t.strip() for t in line.split(sep)]
             if col_num and len(terms) != col_num:
-                logger.error("Column count %d is not correct, check line %s" % (len(terms), line.encode('utf-8')), LEVEL)
+                logger.warn("Column count %d is not correct, check line %s" % (len(terms), line.encode('utf-8')), LEVEL)
                 continue
-            li.append(terms)
-        return li
+            if header:
+                record = {}
+                for i, col_name in enumerate(headers):
+                    record[col_name] = terms[i]
+                res.append(record)
+            else:
+                res.append(terms)
+    end_ts = time.time()
+    logger.debug("[load_text_data.load_line] Done loading %d records, using %.4fs" % (len(res), end_ts-start_ts), LEVEL)
+    return res
 
-
+"""
 def load_file(filename, key_col=0, sep='\t', col_num=None):
-    """
+
     读取文件, 返回一个字典, 每一行制定一个列作为Key, 并且把这一行作为一个列表保存在Key对应的Value中。
     :param filename:
     :param key_col:
     :param sep:
     :param col_num:
     :return:
-    """
+
     res = {}
     f = open(filename)
     for ln in f.readlines():
@@ -139,12 +164,15 @@ def load_feature_file(fname, sep = '\t'):
         dic[key] = dic.get(key, list())
         dic[key].append((feat, wt))
     return dic
+"""
+
+
+def test_load_line():
+    filename = sys.argv[1]
+    for t in load_line(filename, sep='\t', header=True):
+        print t
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print "Usage: python load_text_data.py [filename]"
-        sys.exit(0)
-
-    dic = load_file(sys.argv[1],0)
+    test_load_line()
 
