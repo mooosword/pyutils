@@ -1,70 +1,42 @@
-import os, sys, re
+# -*- coding=utf-8 -*-
+import os
+import sys
 import pymongo
 import logger
 
-LEVEL= 1
+LEVEL = os.getenv("LOG", 1)
 
-class DBConnection:
-    
+
+class MongoClient(object):
+    """
+    MongoClient Wrapper
+    """
     conn = None
-    
-    def __init__(self):
-        conn = None
-    
-    def connect(self, url='10.174.37.196', port=27017):
-        self.conn = pymongo.MongoClient(url, port)
+
+    def __init__(self, url='127.0.0.1', port=27017):
+        if not self.conn:
+            self.conn = pymongo.MongoClient(url, port)
         if self.conn:
-            logger.info("Connecting to %s:%s, success!" % (url, port), LEVEL)
+            logger.info("[MongoClient] Initialize connection to %s:%s" % (url, port), LEVEL)
         else:
-            logger.info("Failed Connecting to %s:%s.." % (url, port), LEVEL)
-    
-    def close(self):
-        logger.info("Disconnecting", LEVEL)
-        return self.conn.disconnect()
+            logger.error("[MongoClient] Failed to connect to %s:%s" % (url, port), LEVEL)
 
-    def getConnect(self):
-        return self.conn
+    def __del__(self):
+        logger.info("[MongoClient] Close connection.", LEVEL)
+        return self.conn.close()
 
-    def getDatabaseNames(self):
+    def get_table(self, db_name, table_name):
+        """
+        获取mongo collection对象
+        :param db_name:
+        :param table_name:
+        :return:
+        """
         if not self.conn:
-            print >> sys.stderr,  "[Error] Init Failed!"
-        return self.conn.database_names()
+            logger.error("[MongoClient] No connection initialized.", LEVEL)
+        return self.conn[db_name][table_name]
 
-    def showDatabaseNames(self):
-        if not self.conn:
-            print >> sys.stderr,  "[Error] Init Failed!"
-        print self.conn.database_names()
-    
-    def showCollectionNames(self, db_name):
-        if not self.conn:
-            print >> sys.stderr,  "[Error] Init Failed!"
-        print self.conn[db_name].collection_names()
-
-    def getCollectionNames(self, db_name):
-        if not self.conn:
-            print >> sys.stderr,  "[Error] Init Failed!"
-        return self.conn[db_name].collection_names()
-    
-    def getDatabase(self, db_name):
-        if not self.conn:
-            print >> sys.stderr, "[Error] Init Failed!"
-        return self.conn[db_name]
-
-    def getCollection(self, db_name, collection_name):
-        if not self.conn:
-            print >> sys.stderr, "[Error] Init Failed!"
-        return self.conn[db_name][collection_name]
-
-    def getCollectionContentAsJsonObjects(self, db_name, collection_name, limit=1000000000):
-        table = self.getCollection(db_name,collection_name)
-        json_list = list()
-        for entry in table.find():
-            json_list.append(entry)
-            if len(json_list) > limit:
-                break
-        return json_list
-    
-
+"""
 def output_collection_schema(conn, db, output_path):
     w = open(output_path + '/' + db + '.collections.schema.tsv', 'w')
     for collection_name in conn.getCollectionNames(db):
@@ -86,7 +58,7 @@ def output_collection_schema(conn, db, output_path):
         print >> w, ''
     
     w.close()
-
+"""
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -99,23 +71,6 @@ if __name__ == '__main__':
     else:
         print "[WARN] %s is existed" % (output_path)
 
-    mongoDB = DBConnection()
-    mongoDB.connect()
-    
-    print "[INFO] Connecting to localhost:27017, success!"
-    print "[INFO] Show databases.."
-    mongoDB.showDatabaseNames()
-
-    print "\t - Please input the database name"
-    _db_name = raw_input()
-    
-    output_collection_schema(mongoDB, _db_name, output_path)
-    
-    #mongoDB.showCollectionNames(_db_name)
-    #print "\t - please input the collection name"
-    #_collection_name = raw_input()
-    #table = mongoDB.getCollection(_db_name, _collection_name)
- 
     
 
 

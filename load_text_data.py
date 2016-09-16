@@ -1,5 +1,4 @@
 # -*- coding=utf-8 -*-
-
 import sys
 import os
 import logger
@@ -37,7 +36,7 @@ def get_header(line, sep, col_num=None):
     :param col_num:
     :return:
     """
-    terms = line.strip().split(sep)
+    terms = line.decode('utf-8').strip().split(sep)
     if col_num and len(terms) != col_num:
         logger.error("Column count %d is not correct, check line %s" % (len(terms), line), LEVEL)
         sys.exit(-1)
@@ -89,29 +88,62 @@ def load_line(filename, sep='\t', header=False, col_num=None):
             else:
                 res.append(terms)
     end_ts = time.time()
-    logger.debug("[load_text_data.load_line] Done loading %d records, using %.4fs" % (len(res), end_ts-start_ts), LEVEL)
+    logger.debug("[load_text_data.load_line] Done loading %d records from %s, using %.4fs" % (len(res), filename,
+                                                                                              end_ts-start_ts), LEVEL)
     return res
 
-"""
-def load_file(filename, key_col=0, sep='\t', col_num=None):
 
+def load_line_with_key(filename, key_column=0, sep='\t', header=False, column_num=None):
+    """
     读取文件, 返回一个字典, 每一行制定一个列作为Key, 并且把这一行作为一个列表保存在Key对应的Value中。
     :param filename:
-    :param key_col:
+    :param key_column:
     :param sep:
-    :param col_num:
+    :param header:
+    :param column_num:
     :return:
+    """
+    def line_generator(file_object):
+        while True:
+            _line = file_object.readline()
+            if not _line:
+                break
+            yield _line
 
     res = {}
-    f = open(filename)
-    for ln in f.readlines():
-        ln = ln.decode('utf-8').strip()
-        if not ln:
-            continue
-        if len(ln.split(sep)) != col_num:
-            logger.error("Column count %d is not correct, check line %s" % (len(ln.split(sep)), ln.encode('utf-8')), LEVEL)
-        terms = [t.strip() for t in ln.split(sep) if t.strip()]
-        res[terms[key_col]] = terms
+    start_ts = time.time()
+    with open(filename, 'r') as f:
+        if header:
+            line = f.readline()
+            headers = get_header(line, sep, column_num)
+        # 获取文件大小, 大文件则采用生成器方法迭代
+        count = get_file_line_count(filename)
+        if count < BIG_FILE_LINE_COUNT:
+            lines = f.readlines()
+        else:
+            lines = line_generator(f)
+
+        for line in lines:
+            line = line.decode('utf-8').strip()
+            if not line:
+                continue
+            terms = [t.strip() for t in line.split(sep)]
+            if column_num and len(terms) != column_num:
+                logger.warn("[load_text_data.load_line_with_key] Column count %d is not correct, check line %s" % (len(terms), line.encode('utf-8')), LEVEL)
+                continue
+            key = terms[key_column]
+            if key in res:
+                logger.warn("[load_text_data.load_line_with_key] Duplicated key: %s" % key, LEVEL)
+            if header:
+                record = {}
+                for i, col_name in enumerate(headers):
+                    record[col_name] = terms[i]
+                res[key] = record
+            else:
+                res[key] = record
+    end_ts = time.time()
+    logger.debug("[load_text_data.load_line_with_key] Done loading %d records from %s, using %.4fs" % (len(res),
+                                                                                                       filename, end_ts - start_ts), LEVEL)
     return res
 
 
@@ -164,14 +196,11 @@ def load_feature_file(fname, sep = '\t'):
         dic[key] = dic.get(key, list())
         dic[key].append((feat, wt))
     return dic
-"""
 
 
 def test_load_line():
     filename = sys.argv[1]
-    for t in load_line(filename, sep='\t', header=True):
-        print t
-
+    load_line(filename, '\t')
 
 if __name__ == '__main__':
     test_load_line()
